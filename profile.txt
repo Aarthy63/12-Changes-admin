@@ -1,0 +1,963 @@
+
+// userController.js
+exports.getUserDetails = async (req, res) => {
+  console.log(req.body);
+  try {
+    const { id } = req.body;
+    const getUserDetails = await User.findOne({ _id: id });
+    res.status(200).json({ message: 'FetchData Success', getUserDetails });
+  } catch (err) {
+    res.status(500).json({
+      message: ' Error Generating Profile Details',
+      error: err.message,
+    });
+  }
+};
+
+// profile Upload
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, '..', 'public', 'images')); // Files will be stored in the 'uploads' directory
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname);
+  },
+});
+
+const uploadProfile = multer({
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    const filetypes = /jpeg|jpg|png/;
+    const extname = filetypes.test(
+      path.extname(file.originalname).toLowerCase()
+    );
+    const mimetype = filetypes.test(file.mimetype);
+
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb('Error: Images Only!');
+    }
+  },
+}).single('profileImg');
+
+exports.updateUserDetails = async (req, res) => {
+  uploadProfile(req, res, async (err) => {
+    console.log('hii');
+    if (err) {
+      res
+        .status(400)
+        .json({ message: 'Image upload failed ...', error: err.message });
+    }
+    try {
+      const { id, image, email, subject, name } = req.body;
+
+      const getUserData = await User.updateOne(
+        { _id: id },
+        {
+          $set: {
+            image:
+              typeof image === 'string'
+                ? image
+                : path.join('images/', req.file.filename),
+            image,
+            email,
+            subject,
+            name,
+          },
+        }
+      );
+      // console.log(getUserData);
+
+      res.status(201).json({ message: 'Profile Updated' });
+    } catch (error) {
+      res.status(400).json({ message: 'Upload Failed', error: error.message });
+    }
+  });
+};
+
+// users.js
+router.post('/Userdetails', userController.getUserDetails);
+router.post('/Imageupload', userController.updateUserDetails);
+
+// schema.js
+ image: {
+      type: String,
+    },
+    subject: {
+      type: String,
+    },
+  email: {
+      type: String,
+    },
+ name: {
+      type: String,
+    },
+
+
+// frontend
+
+// support.js
+const handleUserDataDetails = async (data) => {
+    const imageFile = data.image[0];
+    const formData = new FormData();
+    try {
+      formData.append('image', imageFile);
+      formData.append('name', data.name);
+      formData.append('email', data.email);
+      formData.append('subject', data.subject);
+      // formData.append('id', loggedUserId)
+
+      const profileUpdateReponse = await userProfileUpdate(formData);
+      if (profileUpdateReponse.error) {
+        //    toast.error('Profile Error', {
+        //      position: toast.POSITION.TOP_CENTER,
+        //    });
+        return;
+      }
+      //  toast.success(profileUpdateReponse.data.message, {
+      //    position: toast.POSITION.TOP_CENTER,
+      //  });
+    } catch (error) {
+      //toast.error(error.data.message)
+      console.error('Error updating item:', error);
+      // You can add further error handling logic here, such as displaying an error message to the user.
+    }
+  };
+  useEffect(() => {
+    // post on submit update function
+    handleUserDataDetails({
+      image: 'sms',
+      email: 'smdf',
+      subject: 'dsf',
+      name: 'sdflk',
+    });
+
+    // get user details
+    const fetchUserData = async () => {
+      try {
+        const profileUpdateReponse = await userProfileDetails({
+          id: loggedUserId,
+        });
+        const userData = profileUpdateReponse.data.getUserDetails;
+        setProfileImg(userData.profileImg);
+        // setDobInfo(userData.personalInfo.DOB)
+      } catch (err) {
+        console.log(err.message);
+      }
+    };
+    fetchUserData();
+  }, []);
+
+// redux/ api.js
+getProfileDetails: builder.mutation({
+      query: (body) => ({
+        url: 'users/Userdetails',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['StopOrder'],
+    }),
+    profileDetailsUpdate: builder.mutation({
+      query: (formData) => ({
+        url: 'users/Imageupload',
+        method: 'POST',
+        body: formData,
+      }),
+      invalidatesTags: ['StopOrder'],
+    }),
+
+
+import React, { Fragment, useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { TabContent, TabPane, Nav, NavItem, NavLink
+} from 'reactstrap';
+import classnames from 'classnames';
+
+import fileUploadIcon from '../../assets/images/file-upload-icon.svg';
+import vwTcktArrw from '../../assets/images/vw-tckt-arrw.svg';
+import vwtcktInptIcon1 from '../../assets/images/vwtckt-inpt-icon1.svg';
+import vwtcktInptIcon2 from '../../assets/images/vwtckt-inpt-icon2.svg';
+
+import ReactDOM from "react-dom";
+import {
+	BrowserRouter, Navigate, Route, Routes, Link
+ } from 'react-router-dom';
+ import {
+    Accordion,
+    AccordionItem,
+    AccordionItemHeading,
+    AccordionItemButton,
+    AccordionItemPanel,
+} from 'react-accessible-accordion';
+import {useProfileDetailsUpdateMutation, useGetProfileDetailsMutation} from '../redux/api'
+// Demo styles, see 'Styles' section below for some notes on use.
+import 'react-accessible-accordion/dist/fancy-example.css';
+
+import { yupResolver } from "@hookform/resolvers/yup";
+import * as Yup from "yup";
+
+const validationSchema = Yup.object().shape({
+    profileImg: Yup.mixed(),
+    Name: Yup.string()
+      .required(" Name is required")
+      .matches(
+        /^[_A-zA-Z]*((-|\s)*[_A-zA-Z])*$/g,
+        "Name is Should be characters only"
+      )
+      .trim(),
+
+    Email: Yup.string()
+      .required("Email is required")
+      .matches(/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i, "Enter valid Email")
+      .email("Email is invalid")
+      .trim(),
+
+    Number: Yup.string()
+      .required("Number is required")
+      .min(10, "Number should have 10 digits only")
+      .max(10, "Number should be in 10 digits")
+      .matches(/^[6-9]\d{9}$/, "Enter valid number")
+      .trim(),
+
+    State: Yup.string()
+      .required(" State is required")
+      .matches(
+        /^[_A-zA-Z]*((-|\s)*[_A-zA-Z])*$/g,
+        "State is Should be characters only"
+      )
+      .trim(),
+      Comments: Yup.string()
+      .required(" Comments is requrired")
+      .matches(
+        /^[_A-zA-Z]*((-|\s)*[_A-zA-Z])*$/g,
+        "State is Should be characters only"
+      )
+      .trim(),
+ });
+
+  // functions to build form returned by useForm() hook
+ 
+
+
+  
+ const DsbPages = (props) => {
+
+  
+    const loggedUserId = localStorage.getItem('userId')
+    const [profileImg, setProfileImg]= useState();
+    const [userProfileUpdate]= useProfileDetailsUpdateMutation();
+    const [userProfileDetails]= useGetProfileDetailsMutation();
+
+    const [activeTab, setActiveTab] = useState('1');
+    const toggle = tab => {
+        if(activeTab !== tab) setActiveTab(tab);
+    }
+
+    const {
+        register,
+        handleSubmit,
+        reset,
+        formState: { errors },
+      } = useForm({
+        resolver: yupResolver(validationSchema),
+        mode: "all",
+      });
+      const handleFileChange = (e)=> {
+        setProfileImg (e.target.files[0])
+      }
+
+
+    const handleUserDataDetails = async (data) => {
+        const ProfileImg = profileImg;
+
+        // const imageFile = data.image[0];
+        const formData = new FormData();
+        try {
+          formData.append('ProfileImg', ProfileImg);
+          formData.append('Name', data.Name);
+          formData.append('Number', data.Number)
+          formData.append('Email', data.Email);
+          formData.append('State', data.State);
+          formData.append('id', loggedUserId)
+    
+          const profileUpdateReponse = await userProfileUpdate(formData);
+          if (profileUpdateReponse.error) {
+            //    toast.error('Profile Error', {
+            //      position: toast.POSITION.TOP_CENTER,
+            //    });
+            return;
+          }
+          //  toast.success(profileUpdateReponse.data.message, {
+          //    position: toast.POSITION.TOP_CENTER,
+          //  });
+        } catch (error) {
+          //toast.error(error.data.message)
+          console.error('Error updating item:', error);
+          // You can add further error handling logic here, such as displaying an error message to the user.
+        }
+      };
+      useEffect(() => {
+        // post on submit update function
+        handleUserDataDetails({
+          Name: 'asdf',
+          Number: '61',
+          email: 'asdfa',
+          State:'asdfs',
+          Comments: 'asdfa',
+        });
+    
+        // get user details
+        const fetchUserData = async () => {
+          try {
+            const profileUpdateReponse = await userProfileDetails({
+              id: loggedUserId
+            });
+            reset({
+                Name: userData.name,
+                Number: userData.phoneNo,
+                email: userData.email,
+                State: userData.state,
+                Comments: userData.Comments
+              })
+            const userData = profileUpdateReponse.data.getUserDetails;
+            setProfileImg(userData.profileImg);
+            // setDobInfo(userData.personalInfo.DOB)
+          } catch (err) {
+            console.log(err.message);
+          }
+        };
+        fetchUserData();
+      }, []);
+
+  
+    return (
+      <Fragment>
+
+        <div className="DbCntMain">
+            <div className="BluBg107 SwapMainSec BluBgLight">
+                <div className="SwpHdd mb-4">
+                    <h4>Support</h4>
+                </div>
+                <div className="BluBg0b0 SwpFrMainSec StkFrmMain">
+                    <div className="SupprtTbbSec">
+                        <TabContent activeTab={activeTab}>
+                            <TabPane tabId="1">
+                                <form className="SupprtFrmMain" onSubmit={handleSubmit(handleUserDataDetails)}>
+                                    <div className="row">
+                                        <div className="col-lg-6">
+                                        <div className="form-group ">
+                                                <label for="input2" className="FrmLbl">Name<span>*</span></label>
+                                                <input
+                            name="Name"
+                            type="text"
+                            {...register("Name")}
+                            className={`form-control ${errors.Name ? "is-invalid" : ""
+                              }`}
+                            placeholder="Enter Your Name"
+                          />
+                          <div
+                            className="invalid-feedback"
+                            style={{ marginLeft: "10%", fontFamily: "monospace" }}
+                          >
+                            {errors.Name?.message}
+                          </div>
+                                            </div>
+                                            <div className="form-group ">
+                                                <label for="inputEmail4" className="FrmLbl">Email<span>*</span></label>
+                                                <input
+                            name="Email"
+                            type="text"
+                            {...register("Email")}
+                            className={`form-control ${errors.Email ? "is-invalid" : ""
+                              }`}
+                            placeholder="Enter Your E-mail"
+                          />
+                          <div
+                            className="invalid-feedback"
+                            style={{ marginLeft: "10%", fontFamily: "monospace" }}
+                          >
+                            {errors.email?.message}
+                          </div>
+                                            </div>                                            
+                                        </div>
+                                        <div className="col-lg-6">
+                                        <div className="form-group ">
+                                                <label for="inputEmail4" className="FrmLbl">Number<span>*</span></label>
+                                                <input
+                            name="Number"
+                            type="text"
+                            {...register("Number")}
+                            className={`form-control ${errors.Number ? "is-invalid" : ""
+                              }`}
+                            placeholder="Enter Your Phone Number"
+                          />
+                          <div
+                            className="invalid-feedback"
+                            style={{ marginLeft: "10%", fontFamily: "monospace" }}
+                          >
+                            {errors.Number?.message}
+                          </div>
+                                            </div> 
+                                            <div className="form-group ">
+                                                <label for="inputEmail4" className="FrmLbl">State<span>*</span></label>
+                                                <input
+                            name="State"
+                            type="text"
+                            {...register("State")}
+                            className={`form-control ${errors.State ? "is-invalid" : ""
+                              }`}
+                            placeholder="Enter Your State"
+                          />
+                          <div
+                            className="invalid-feedback"
+                            style={{ marginLeft: "10%", fontFamily: "monospace" }}
+                          >
+                            {errors.State?.message}
+                          </div>
+                                            </div>
+                                            <div className="form-group ">
+                                                <label for="exampleFormControlTextarea1" className="FrmLbl">Comments<span>*</span></label>
+                                                <textarea  {...register("Comments")} className={`form-control ${errors.Comments ? "is-invalid" : ""
+                              }`}
+                            placeholder="Enter Your State" id="exampleFormControlTextarea1" rows="5"></textarea>
+                              <div
+                            className="invalid-feedback"
+                            style={{ marginLeft: "10%", fontFamily: "monospace" }}
+                          >
+                            {errors.Comments?.message}
+                          </div>
+                                            </div>
+                                            
+                                            <div className="form-group ">
+                                                <label for="exampleFormControlTextarea1" className="FrmLbl">Add Attachment</label>
+                                                <div className="uploadFile">
+                                                    <div className="uploadFileFlx">
+                                                        <div className="fileCnt">
+                                                            <p>Select or drop image here</p>
+                                                            <span>Max file size is 100Kb</span>
+                                                        </div>
+                                                        <div className="fileUpldIcon">
+                                                            <img src={fileUploadIcon}  {...register('profileImg')}   alt="" className="img-fluid"  onChange={handleFileChange} />
+                                                        </div>
+                                                        <div
+                            className="invalid-feedback"
+                            style={{ marginLeft: "10%", fontFamily: "monospace" }}
+                          >
+                            {errors.profileImg?.message}
+                          </div>
+                                                    </div>
+                                                    <input type="file" className="inputfile form-control" name="file" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="text-center SwpMainBtn mt-3 mt-md-5">
+                                        <button type="submit" className="btn BtnPrimry Btn160-42">Submit</button>
+                                    </div>
+                                </form>
+                            </TabPane>
+                                        </TabContent>
+                    </div>
+                </div>
+            </div>
+        </div>
+		
+      </Fragment>
+    );
+    
+}
+
+
+const mongoose = require('mongoose');
+
+const userSchema = new mongoose.Schema({
+  firstName: {
+    type: String,
+    required: true
+  },
+  lastName: {
+    type: String,
+    required: true
+  },
+  email: {
+    type: String,
+    required: true
+  },
+  username: {
+    type: String,
+    required: true
+  },
+    password: {
+    type: String,
+    required: true
+  },
+  otp: {
+    code: {
+        type: String,
+        // required: true,
+    },
+    expiration: {
+        type: Date,
+        // required: true,
+    },
+},
+createdAt: {
+    type: Date,
+    default: Date.now(),
+},
+updatedAt: {
+    type: Date,
+},
+verified: {
+    type: Boolean,
+    default: false,
+},
+temp_secret: {
+  type: Object
+},
+secret: {
+  type: Object,
+},
+twoFactorAuth: {
+  type: Boolean,
+  default: false
+},
+
+kycstatus:{
+  type:Boolean,
+  default:false
+},
+frontSideImg:{
+  type:String
+},
+backSideImg:{
+  type:String
+},
+kycSelfieImg:{
+  type:String
+},
+createdAt:{
+  type:Date,
+  default:Date.now()
+},
+ProfileImg: {
+  type: String,
+},
+Number: {
+  type: String,
+},
+Email: {
+  type: String,
+},
+Name: {
+  type: String,
+},
+State: {
+  type: String,
+},
+Comments: {
+  type: String,
+},
+
+ 
+},
+ {collection: 'users'});
+
+const User = mongoose.model('User', userSchema);
+module.exports = User;
+export default DsbPages;
+
+
+// // var express = require('express');
+// // var router = express.Router();
+// // const mongoose = require('mongoose');
+// // const app = express();
+// const express = require('express');
+// const router = express.Router();
+// const mongoose = require('mongoose');
+// const bcrypt = require('bcrypt');
+
+// const app = express();
+
+
+// const MONGODB_URI = 'mongodb://localhost:27017/sample'; // Make sure to replace with your actual MongoDB URI
+// mongoose.connect(MONGODB_URI, {
+//   useNewUrlParser: true,
+//   useUnifiedTopology: true
+// })
+//   .then(() => {
+//     console.log('MongoDB database connection established successfully');
+//   })
+//   .catch((error) => {
+//     console.error('MongoDB connection error: ', error);
+//   });
+
+// // Create a User schema
+// const userSchema = new mongoose.Schema({
+//   firstName: {
+//     type: String,
+//     required: true
+//   },
+//   lastName: {
+//     type: String,
+//     required: true
+//   },
+
+//   email: {
+//     type: String,
+//     required: true
+//   },
+//   password: {
+//     type: String,
+//     required: true
+//   }
+// });
+
+// // Create a User model
+// const User = mongoose.model('User', userSchema);
+// /* GET users listing. */
+
+// // router.get('/', function(req, res) {
+// //   res.send('respond with a resource');
+// // });
+
+// router.post('/register', async function(req, res) {
+//   res.send("test")
+//  console.log(req.body);
+//   try {
+//     const { firstName, email, password } = req.body;
+
+//     const newUser = new User({
+//       firstName,
+//         email,
+//       password,
+//     });
+// console.log(newUser)
+
+//     await newUser.save();
+
+//     res.status(201).json({ message: 'User registered successfully' ,_id});
+//   } catch (error) {
+//     res.status(400).json({ message: 'Registration failed', error: error.message });
+//   }
+
+//   res.send('respond with a wfdwqef resource');
+// });
+// router.post('/test', async function(req, res) {
+//   res.send("test")
+//  // console.log(re);
+// })
+
+// // router.post('/register', async function(req, res) {
+// //   console.log(req.body);
+// // })
+// // //   try {
+// // //     const { firstName, lastName, email, password } = req.body;
+
+// // //   //   const newUser = new User({
+// // //   //     firstName,
+// // //   //     lastName,
+// // //   //     email,
+// // //   //     password,
+// // //   //   });
+
+// // //   //   const savedUser = await newUser.save();
+
+// // //   //   // Retrieve the _id of the saved user
+// // //   //   const { _id } = savedUser;
+
+// // //   //   res.status(201).json({ message: 'User registered successfully', userId: _id });
+// // //   // } catch (error) {
+// // //   //   res.status(400).json({ message: 'Registration failed', error: error.message });
+// // //   // }
+// // // });
+
+
+// // // app.post('/register', async (req, res) => {
+// // //   // const { username, email, password } = req.body;
+// // //   // console.log("data", username);
+// // //   // try {
+// // //   //   const user = new User({ username, email, password });
+// // //   //   await user.save();
+// // //   //   res.status(201).json({ message: 'User registered successfully' });
+// // //   // } catch (error) {
+// // //   //   console.error('Error saving user to the database: ', error); // Log the error
+// // //   //   res.status(500).json({ error: 'Internal Server Error' });
+// // //   // }
+// // //   res.send('respond with a dsegfesgrgre resource');
+// // // });
+
+
+
+// router.post("/login",(req,res) => {
+
+//   //Form Valdiation
+
+
+
+// const email = req.body.email;
+// const password = req.body.password;
+
+// //Find user by Email
+// User.findOne({email}).then(user=>{
+//     if(!user){
+//         return res.status(404).json({ emailnotfound: "Email not found" });
+//     }
+
+
+
+
+// // //   });
+// // // });
+
+// router.post("/login", async (req, res) => {
+//   try {
+//     const { email, password } = req.body;
+
+//     // Find user by Email
+//     const user = await User.findOne({ email });
+//     if (!user) {
+//       return res.status(404).json({ emailnotfound: "Email not found" });
+//     }
+
+//     // Check password
+//     const isPasswordValid = await bcrypt.compare(password, user.password);
+//     if (!isPasswordValid) {
+//       return res.status(400).json({ passwordincorrect: "Password incorrect" });
+//     }
+
+//     // You can generate and send a token for authentication if the email and password are correct
+//     res.json({ success: true, message: "Login successful" });
+//   } catch (error) {
+//     res.status(500).json({ message: "Internal Server Error", error: error.message });
+//   }
+// });
+
+
+// module.exports = router;
+
+
+const express = require('express');
+const router = express.Router();
+const userController = require('../controller/userController')
+
+router.get("/", userController.get );
+router.post("/register", userController.post);
+router.get("/fetchuser", userController.fetchuser);
+router.put("/update/:id", userController.updateById);
+router.post("/login", userController.login);
+router.get("/getSingle", userController.getSingle)
+router.get("/fetchuser/:id", userController.fetchuserById );
+router.delete("/deleteuser/:id", userController.deleteuserById);
+router.post("/forgetPassword" , userController.forgetPassword)
+router.post("/create", userController.createUser)
+router.post("/verifyOtp", userController.verifyOtp)
+router.post("/setNewPassword", userController.setNewPassword)
+router.post("/forgetpasswordverifyOtp", userController.forgetPasswordverifyOtp)
+router.post("/loginverifyOtp", userController.loginverifyOtp)
+router.post("/handleTwoFactorAuthentication", userController.handleTwoFactorAuthentication)
+router.post("/verifyTwoFactorAuthentication", userController.verifyTwoFactorAuthentication)
+router.post("/getTwoFactorAuthentication", userController.getTwoFactorAuthentication)
+router.post("/disableTwoFactorAuthentication", userController.disableTwoFactorAuthentication)
+router.post("/submitkyc", userController.handlekyc)
+router.post('/changePassword', userController.changePassword);
+router.post('/profileDetailsUpdate', userController.profileDetailsUpdate)
+router.post('/getProfileDetails', userController.getProfileDetails)
+router.post('/Userdetails', userController.getUserDetails);
+router.post('/Imageupload', userController.updateUserDetails);
+
+
+module.exports = router;
+
+
+
+
+// router.get("/fetchuser/:id",  function (req, res, next) {
+//   try {
+//     const ID = req.params.id;
+//     User.findOne({ _id: ID })
+//       .then((data) => res.json({ data }))
+//       .catch((err) => res.json(err))
+//   } catch (error) {
+//     console.log(error);
+//   }
+// });
+
+
+
+// try {
+    //   const token = req.header('Authorization');
+    //   if (!token) return res.status(401).json({ message: 'Access denied. No token provided.' });
+    //   const tokenData = token.split(' ')[1]; // Extracting the token from the Bearer token
+    //   jwt.verify(tokenData, 'aaraa', (err, decoded) => {
+    //     if (err) return res.status(401).json({ message: 'Invalid token.' });
+    //     console.log(decoded)
+    //     const ID = decoded.data;
+    //     User.findOne({ _id: ID })
+    //       .then((data) => res.json({ data }))
+    //       .catch((err) => res.status(404).json({ message: 'User not found' }));
+    //   });
+      
+    // } catch (error) {
+    //   console.error('Error:', error);
+    //   res.status(500).json({ message: 'Server Error' });
+    // }
+// <--------------------------------------------------------------->
+// router.delete("/deleteuser/:id", function (req, res, next) {
+//   try {
+//     const ID = req.params.id;
+//     User.deleteOne({ _id: ID })
+//       .then((data) => res.json({ data }))
+//       .catch((err) => res.json(err));
+//   } catch (error) {
+//     console.log(error);
+//   }
+// // });
+
+// router.delete("/deleteuser/:id", function (req, res, next) {
+//   console.log(req.params.id);
+//   try {
+//     const token = req.header('Authorization');
+//     if (!token) return res.status(401).json({ message: 'Access denied. No token provided.' });
+
+//     const tokenData = token.split(' ')[1]; // Extracting the token from the Bearer token
+
+//     jwt.verify(tokenData, 'aaraa', (err, decoded) => {
+//       if (err) return res.status(401).json({ message: 'Invalid token.' });
+//       console.log(decoded);
+//       const ID = decoded.data;
+//       User.findOneAndDelete({ _id: ID })
+//         .then((data) => res.json({ message: 'User deleted successfully' }))
+//         .catch((err) => res.status(404).json({ message: 'User not found' }));
+//     });
+//   } catch (error) {
+//     console.error('Error:', error);
+//     res.status(500).json({ message: 'Server Error' });
+//   }
+// });
+
+
+
+//<------------------------------------------------------------->
+// router.post("/login", async (req, res) => {
+//   try {
+//     const { email, password } = req.body;
+
+//     const user = await User.findOne({ email });
+//     if (!user) {
+//       return res.status(404).json({ emailnotfound: "Email not found" });
+//     }
+
+//     else if (password !== user.password) {
+//       return res.status(400).json({ passwordincorrect: "Password incorrect" });
+//     }
+
+//     res.json({ success: true, message: "Login successful", user });
+//   } catch (error) {
+//     res.status(500).json({ message: "Internal Server Error", error: error.message });
+//   }
+
+
+// router.post('/upload', userController.post);
+//------------------------------->
+
+// async (req, res) => {
+//   const { email, password } = req.body;
+//   const user = await User.findOne({ email });
+//   console.log(user);
+//   if (!user) {
+//     res.status(401).
+//     json({ message: 'Invalid email or password' });
+//   }
+//   const passwordCheck = await bcrypt.compare(password, user.password);
+//   console.log(passwordCheck);
+//   if (!passwordCheck) {
+//     return res.status(401).
+//     json({ message: 'Invalid email or password' });;
+//   }
+// const token=  jwt.sign({
+//     data:user. _id
+//   }, 'aaraa', { expiresIn: '1hr' });
+//   res.status(200).json({message: 'Login successfully..',user, token})
+// }
+
+//<-------------------------->
+// router.put("/update/:id", async (req, res) => {
+//   // try {
+//   //   const { firstName, email, _id} = req.body;
+//   // const res = await User.updateOne({_id: _id}, {
+//   //     firstName: firstName,
+//   //     email: email,
+//   //     // password: password, 
+//   //   })
+    
+//   // } catch (error) {
+//   //   res
+//   //   .status(400)
+//   //   .json({ message: "request Failed", error: error.message });
+//   // }
+//   console.log(req.body)
+//   try {
+//     const { firstName, email } = req.body; // Remove _id as it's already in the route params
+//     const userId = req.params.id; // Get the user ID from route params
+//     const updatedUser = await User.updateOne({ _id: userId }, {
+//               firstName: firstName,
+//               email: email,    
+//             });
+//     if (!updatedUser) {
+//       return res.status(404).json({ message: "User not found" });
+//     }
+//     res.json({ message: "User updated successfully", user: updatedUser });
+//   } catch (error) {
+//     res.status(400).json({ message: "Request Failed", error: error.message });
+//   }
+// });
+
+
+
+
+
+
+// router.put("/updateuser/:id", async (req, res) => {
+//   try {
+//     const token = req.header('Authorization');
+//     if (!token) return res.status(401).json({ message: 'Access denied. No token provided.' });
+//     const tokenData = token.split(' ')[1]; 
+//     try {
+//       const decoded = jwt.verify(tokenData, 'aaraa', (err, decoded)); 
+//       const { firstName, email, _id } = req.body;
+//       const result = await User.updateOne({ _id: _id }, {
+//         firstName: firstName,
+//         email: email,    
+//       });
+//       if (!result) {
+//         return res.status(404).json({ message: 'User not found' });
+//       }
+//       res.json({ message: 'User updated successfully' });
+//     } catch (error) {
+//       res.status(401).json({ message: 'Invalid token.' });
+//     }
+//   } catch (error) {
+//     res.status(400).json({ message: 'Request Failed', error: error.message });
+//   }
+// });
+
+ getProfileDetails: builder.mutation({
+        query: (body) => ({
+          url: 'users/Userdetails',
+          method: 'POST',
+          body,
+        }),
+        invalidatesTags: ['Admin'],
+      }),
+      
+      profileDetailsUpdate: builder.mutation({
+        query: (formData) => ({
+          url: 'users/Imageupload',
+          method: 'POST',
+          body: formData,
+        }),
+        invalidatesTags: ['Admin'],
+      }),
+
